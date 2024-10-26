@@ -1,0 +1,795 @@
+---
+title: 'Lab 1: Basic compartmental model building in R_Hilma Nakambale'
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include = FALSE, echo = T}
+knitr::opts_chunk$set(echo = T, tidy = F, tidy.opts = list(width.cutoff = 60))
+```
+
+```{r, echo = T,  warning = F, message = F, Eval=T}
+# Attach packages
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(deSolve))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(rmarkdown))
+suppressPackageStartupMessages(library(tinytex))
+suppressPackageStartupMessages(library(pdftools))
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(reshape2))
+
+```
+
+## 1. SUSCEPTIBLE-INFECTED (SI) MODEL
+
+### a. Define the SI model: describe the model in words, including key assumptions.
+The SI model (Susceptible-Infected model) is a simple compartmental model used in epidemiology to describe the spread of infectious diseases within a population. It divides the population into two compartments: Susceptible (S) - Individuals who are not infected but are vulnerable to catching the infection and Infected (I) - Individuals who are currently infected and can transmit the disease to susceptible individuals. The model assumes that individuals can move from the S compartment to the I compartment, but once they are infected, they remain in that state indefinitely. There is no recovery or death in the basic SI model. The rate at which susceptible individuals become infected is proportional to the number of currently infected individuals and the number of susceptible individuals.
+
+The model makes the following key assumptions:
+1.	Every individual in the population has an equal chance of coming into contact with every other individual, meaning that susceptible and infected individuals mix uniformly.
+2.	The rate of infection depends on the contact rate between susceptible and infected individuals and the probability of transmission when contact occurs. 
+3.	The model assumes that individuals do not recover or die, and once infected, they remain infected indefinitely (i.e., no transition out of the Infected compartment).
+
+### b. Draw a model diagram of your SI model.
+```{r, echo = F, eval = T}
+# Modify the below to the directory and name where you have stored your model diagram. When the image file is in the same directory as the .rmd file, you can just use the image file name and not a whole file path
+#pdf_convert("model_diagram_1.pdf", format = "png", pages = 1)
+knitr::include_graphics("model_diagram_1_1.png")
+```
+
+### c. Using the parameters below, program an SI model in both R and Excel. Report model results from your R model in increments of 0.25 timesteps.
+```{r, echo = F, eval = T}
+param_table <- data.table(Parameter = c("c", "rho", "Initial susceptibles", "Initial infecteds", "Length of simulation (Days)"), 
+                          Value = c(5, 0.05, 999, 1, 100))
+knitr::kable(x = as.matrix(param_table), align = "l", 
+             col.names = names(param_table)) %>% row_spec(0, bold = T) %>% kable_styling(bootstrap_options = c("striped", "condensed"), latex_options = "striped", position = "left", full_width = F)
+```
+&nbsp;
+
+```{r, echo = F}
+# Define state variables and initial conditions
+init <- c(S = 999,
+          I = 1,
+          cum_new_infections = 0)
+
+# Define parameters
+params <- c(c   = 5,
+            rho = 0.05)
+
+# Define length of simulation and output steps
+t <- seq(0, 100, 0.25)
+
+# Define function
+fx_si <- function(t, y, params) {
+  with(c(as.list(y), params), {
+    # Define population size
+    N <- S + I
+    
+    # Define differential equations
+    dS <- -c * rho * S * I/N
+    dI <- c * rho * S * I/N
+    
+    # Calculate cumulative number of new infections
+    cum_new_infections <- c * rho * S * I/N
+    
+    # Specify output to be returned by function
+    list(c(dS, dI, cum_new_infections))
+  })
+}
+
+output <- as.data.table(ode(y = init, times = t, func = fx_si, parms = params, method = "lsoda"))
+
+```
+
+### d. Plot the results from your simulation from both R and Excel and include a subset of output from your R simulation in a table.
+
+Plot from R:
+
+```{r, echo = F, fig.width = 8.5, fig.height = 3, eval = T}
+# Define state variables and initial conditions
+init <- c(S = 999,
+          I = 1,
+          cum_new_infections = 0)
+
+# Define parameters
+params <- c(c   = 5,
+            rho = 0.05)
+
+# Define length of simulation and output steps
+t <- seq(0, 100, 0.25)
+
+# Define function
+fx_si <- function(t, y, params) {
+  with(c(as.list(y), params), {
+    # Define population size
+    N <- S + I
+    
+    # Define differential equations
+    dS <- -c * rho * S * I/N
+    dI <- c * rho * S * I/N
+    
+    # Calculate cumulative number of new infections
+    cum_new_infections <- c * rho * S * I/N
+    
+    # Specify output to be returned by function
+    list(c(dS, dI, cum_new_infections))
+  })
+}
+
+output <- as.data.table(ode(y = init, times = t, func = fx_si, parms = params, method = "lsoda"))
+
+output_melted <- melt(data = output, id.vars = "time", measure.vars = c("S", "I"))
+
+# Plot output
+ggplot(data = output_melted) +
+  geom_line(aes(x = time, y = value, col = variable)) +
+  scale_color_manual(breaks = c("S", "I"), labels = c("Susceptible", "Infected"), values = c("green", "red")) +
+  labs(x = "Time (Days)", y = "Number of individuals", col = "State") +
+  theme(panel.background = element_blank(),
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA),
+        axis.title = element_text(family = "Times"),
+        axis.text = element_text(family = "Times"),
+        legend.key = element_blank(),
+        legend.text = element_text(family = "Times"),
+        legend.title = element_text(family = "Times"))
+```
+
+Plot from Excel:
+```{r, echo = F, eval = T}
+knitr::include_graphics(path = "Excel_SI_model_1_1.png")
+```
+
+
+&nbsp;
+```{r, echo = F, eval = T}
+# Print subset of table
+kable(output[time %in% seq(25, 30, 0.25)])
+```
+
+### e. Using your R model, report the time step at which the peak number of new infections occurs – what is the peak number of new infections? Report the number of new infections for a full time step.
+```{r, echo = F,  eval = T}
+# Redefine length of simulation and output steps to provide output in full-step increments.
+t <- seq(0, 100, 1)
+
+output <- as.data.table(lsoda(y = init, times = t, func = fx_si, parms = params))
+
+# Calculate the number of new infections at each time step as the difference between total size of the I compartment at time t and t - 1
+output[, new_infections := c(0, diff(cum_new_infections))]
+
+# Time point and number of peak number of infections.
+output[which.max(new_infections), .(time, new_infections)]
+```
+The time step of peak new infections occurs at a point where the absolute number of new infections is highest. This is usually during the period when there is a large number of both susceptible and infected individuals, leading to more opportunities for transmission. In this case, 62.40 new infections occured at time point 28.
+
+### f. Using your R model, report the time step at which peak incidence occurs – what is peak incidence? Why do the time steps of peak new infections and peak incidence differ?
+```{r, echo = F, eval = T}
+# Calculate incidence as the number of new infections at peak incidence divided by the number of susceptible individuals at the previous time step (each row describes states at the end of each time interval, so the risk set is represented by the number of susceptible individuals at the end of the prior time interval).
+output[, incidence := new_infections/shift(S) * 100]
+
+output[which.max(incidence), .(time, incidence)]
+```
+Peak incidence (22.18 in this case) is the maximum level of the infection rate during the epidemic, which is the proportion of new infections in a time step relative to the number of susceptible individuals at the previous time step.The time step of peak incidence occurs when the rate of new infections (relative to the susceptible population) is highest, which tends to happen later in the epidemic when the susceptible population has decreased, even though the number of new infections may not be at its maximum. As fewer susceptible individuals remain, a higher proportion of them may get infected, even if the absolute number of new infections is lower compared to the peak infection period. The time-step of peak incidence differs from that of  peak new infections. The time step of peak new infections occurs when the absolute number of new infections is highest. This is usually during the period when there is a large number of both susceptible and infected individuals, leading to more opportunities for transmission.
+
+### g. Using your R model, plot new infections and incidence.
+```{r, echo = F,  warning = F, message = F, Eval=T}
+# Convert the 'output' object to data.table if necessary
+output <- as.data.table(output)
+
+# Melt dataset for easy plotting
+output_melted <- melt(data = output, id.vars = "time", measure.vars = c("new_infections", "incidence"))
+
+# Convert melted data to data.table
+output_melted <- as.data.table(output_melted)
+
+# Multiply incidence values by two for scaled plotting on a secondary axis in ggplot
+output_melted[variable == "incidence", value := value * 2]
+
+# Create the plot
+ggplot(data = output_melted) +
+  geom_line(aes(x = time, y = value, col = variable)) +
+  geom_vline(aes(xintercept = output[which.max(new_infections), time]), linetype = "dashed", size = 0.25) +
+  scale_y_continuous(name = "Number of new infections",
+                     sec.axis = sec_axis(~ ./2, name = "Incidence (per 100 person-days)")) +
+  labs(x = "Time (Days)") +
+  scale_color_discrete(labels = c("New infections", "Incidence")) +
+  theme(panel.background = element_blank(),
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA),
+        axis.title = element_text(family = "Times"),
+        axis.text = element_text(family = "Times"),
+        legend.key = element_blank(),
+        legend.text = element_text(family = "Times"),
+        legend.title = element_blank())
+```
+### h. Modify your parameter values according to the table below, and plot the timeseries of susceptibles and infecteds that results from both R and Excel.
+```{r, echo = F}
+param_table <- data.table(Parameter = c("c", "rho", "Initial susceptibles", "Initial infecteds", "Length of simulation"), 
+                          Value = c(8, 0.3, 999, 1, 100))
+knitr::kable(x = as.matrix(param_table), align = "l", 
+             col.names = names(param_table)) %>% row_spec(0, bold = T) %>% kable_styling(bootstrap_options = c("striped", "condensed"), latex_options = "striped", position = "left", full_width = F)
+```
+&nbsp;
+
+Plot from R:
+```{r, echo = F, fig.width = 8.5, fig.height = 3, eval = T}
+
+# Redefine time series to report output in increments of 0.25 time steps. Other conditions remain the same as in 1c.
+t <- seq(0, 100, 0.25)
+##############################
+# Define state variables and initial conditions
+init <- c(S = 999,
+          I = 1,
+          cum_new_infections = 0)
+
+# Define parameters
+params <- c(c   = 8.0,
+            rho = 0.3)
+
+# Define length of simulation and output steps
+#t <-0.25
+
+# Define function
+fx_si <- function(t, y, params) {
+  with(c(as.list(y), params), {
+    # Define population size
+    N <- S + I
+    
+    # Define differential equations
+    dS <- -c * rho * S * I/N
+    dI <- c * rho * S * I/N
+    
+    # Calculate cumulative number of new infections
+    cum_new_infections <- c * rho * S * I/N
+    
+    # Specify output to be returned by function
+    list(c(dS, dI, cum_new_infections))
+  })
+}
+
+# Call lsoda function with initial conditions, times, SI function, and parameters defined above.
+output_1 <- as.data.table(ode(y = init, times = t, func = fx_si, parms = params, method = "lsoda"))
+
+
+
+# Melt dataset for easy plotting
+output_melted_1 <- melt(data = output_1, id.vars = "time", measure.vars = c("S", "I"))
+
+# Plot output
+ggplot(data = output_melted_1) +
+  geom_line(aes(x = time, y = value, col = variable)) +
+  scale_color_manual(breaks = c("S", "I"), labels = c("Susceptible", "Infected"), values = c("green", "red")) +
+  labs(x = "Time (Days)", y = "Number of individuals", col = "State") +
+  theme(panel.background = element_blank(),
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA),
+        axis.title = element_text(family = "Times"),
+        axis.text = element_text(family = "Times"),
+        legend.key = element_blank(),
+        legend.text = element_text(family = "Times"),
+        legend.title = element_text(family = "Times"))
+```
+
+Plot from Excel:
+
+```{r, echo = F, eval = T, fig.width = 8.5, fig.height = 3}
+knitr::include_graphics(path = "Excel_SI_model_1_1_2.png")
+```
+
+### i. Using your R model, report the time step at which the peak number of new infections occurs – what is the peak number of new infections? Report the number of new infections for a full time step.
+
+```{r, echo = F, eval = T}
+# Calculate the number of new infections at each time step as the difference between total size of the I compartment at time t and t - 1
+output_1[, new_infections := c(0, diff(cum_new_infections))]
+
+# Time point and number of peak number of infections.
+output_1[which.max(new_infections), .(time, new_infections)]
+```
+The peak number of new infections is 148.883 at time step 3.
+
+### j. Comment on the difference between the R and Excel models using these extreme values. (Hint: take a look at the value of lambda over time in the Excel model, and think about the definition of lambda.)
+
+In the Excel model, the changes in the susceptible and infected populations suggest an unstable feedback loop, possibly linked to the potential seasonality of the epidemic or fluctuations in the infection rate lambda over time. At high lambda values, the model shows repeated cycles of infection, likely due to lambda increasing and decreasing too drastically, which leads to oscillations rather than a steady progression. In contrast, the R model behaves as expected, with lambda remaining constant or increasing smoothly, showing a typical SI epidemic curve without oscillations. The Excel model's instability is likely due to an incorrect calculation of lambda at high values, possibly exaggerating the transmission dynamics.
+
+## 2. SUSCEPTIBLE-INFECTED-RECOVERED (SIR) MODEL
+
+### a. Define the SIR model: Describe the model in words, including key assumptions.
+The SIR model is a compartmental model used in epidemiology to describe the spread of infectious diseases through a population. The population is divided into three compartments: Susceptible (S) refers to individuals who are vulnerable to contracting the disease; Infected (I) refers to individuals who have the disease and can spread it to susceptible individuals; and Recovered (R) refers to individuals who have recovered from the disease and are now immune, meaning they cannot be reinfected or infect others.
+
+Key Assumptions of the SIR Model:
+Every individual in the population has an equal probability of coming into contact with every other individual, meaning the spread of infection occurs uniformly throughout the population.
+The total population size (S + I + R) remains constant over time, assuming no births, deaths, or migration.
+Once infected individuals recover, they move to the recovered compartment and gain lifelong immunity (they cannot return to the susceptible group).
+Individuals are assumed to become infectious immediately after contracting the disease.
+
+### b. Draw a model diagram of your SIR model.
+```{r, echo = F, eval = T}
+knitr::include_graphics("model_diagram_sir_1.png")
+```
+
+### c. Using the parameters below, program an SIR model in R.  Report model results in increments of 0.25 timesteps.
+
+```{r, echo = F}
+param_table <- data.table(Parameter = c("c", "rho", "Recovery rate (nu)", "Initial susceptibles", "Initial infecteds", "Initial recovereds", "Length of simulation"), 
+                          Value = c(5, 0.05, 0.3, 999, 1, 0, 100))
+knitr::kable(x = as.matrix(param_table), align = "l", 
+             col.names = names(param_table)) %>% row_spec(0, bold = T) %>% kable_styling(bootstrap_options = c("striped", "condensed"), latex_options = "striped", position = "left", full_width = F)
+```
+&nbsp;
+```{r, echo = F, eval = F}
+# Define state variables and initial conditions for SIR model
+init <- c(S = 999,  # Initial susceptible population
+          I = 1,    # Initial infected population
+          R = 0,    # Initial recovered population
+          cum_new_infections = 0)  # Cumulative infections
+
+# Define parameters
+params <- c(c = 5,    # Contact rate
+            rho = 0.05,  # Transmission rate per contact
+            nu = 0.30)   # Recovery rate
+
+# Define length of simulation and output steps
+t <- seq(0, 100, 0.25)  # Time from 0 to 100, with intervals of 0.25
+
+# Define SIR model function
+fx_sir <- function(t, y, params) {
+  with(c(as.list(y), params), {
+    # Define total population size
+    N <- S + I + R
+    
+    # Define the differential equations for the SIR model
+    dS <- -c * rho * S * I / N              # Change in susceptible individuals
+    dI <- c * rho * S * I / N - nu * I      # Change in infected individuals
+    dR <- nu * I                            # Change in recovered individuals
+    
+    # Calculate cumulative number of new infections
+    cum_new_infections <- c * rho * S * I / N
+    
+    # Specify output to be returned by function
+    list(c(dS, dI, dR, cum_new_infections))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SIR function, and parameters
+output_2 <- as.data.table(ode(y = init, times = t, func = fx_sir, parms = params, method = "lsoda"))
+```
+
+### d. Plot the results from your simulation and include a subset of output from your simulation table.
+```{r, echo = F, fig.width = 8.5, fig.height = 3, eval = T}
+
+# Define state variables and initial conditions for SIR model
+init <- c(S = 999,  # Initial susceptible population
+          I = 1,    # Initial infected population
+          R = 0,    # Initial recovered population
+          cum_new_infections = 0)  # Cumulative infections
+
+# Define parameters
+params <- c(c = 5,    # Contact rate
+            rho = 0.05,  # Transmission rate per contact
+            nu = 0.30)   # Recovery rate
+
+# Define length of simulation and output steps
+t <- seq(0, 100, 0.25)  # Time from 0 to 100, with intervals of 0.25
+
+# Define SIR model function
+fx_sir <- function(t, y, params) {
+  with(c(as.list(y), params), {
+    # Define total population size
+    N <- S + I + R
+    
+    # Define the differential equations for the SIR model
+    dS <- -c * rho * S * I / N              # Change in susceptible individuals
+    dI <- c * rho * S * I / N - nu * I      # Change in infected individuals
+    dR <- nu * I                            # Change in recovered individuals
+    
+    # Calculate cumulative number of new infections
+    cum_new_infections <- c * rho * S * I / N
+    
+    # Specify output to be returned by function
+    list(c(dS, dI, dR, cum_new_infections))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SIR function, and parameters
+output_2 <- as.data.table(ode(y = init, times = t, func = fx_sir, parms = params, method = "lsoda"))
+
+
+# Melt dataset for easy plotting, include "R" in the measure variables
+output_melted_2 <- melt(data = output_2, id.vars = "time", measure.vars = c("S", "I", "R"))
+
+# Plot output for the SIR model
+ggplot(data = output_melted_2) +
+  geom_line(aes(x = time, y = value, col = variable)) +
+  scale_color_manual(breaks = c("S", "I", "R"),
+                     labels = c("Susceptible", "Infected", "Recovered"),
+                     values = c("green", "red", "blue")) +  # Adding color for Recovered
+  labs(x = "Time (Days)", y = "Number of individuals", col = "State") +
+  theme(panel.background = element_blank(),
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA),
+        axis.title = element_text(family = "Times"),
+        axis.text = element_text(family = "Times"),
+        legend.key = element_blank(),
+        legend.text = element_text(family = "Times"),
+        legend.title = element_text(family = "Times"))
+```
+```{r, echo = F}
+# Print subset of table
+# Define state variables and initial conditions for SIR model
+init <- c(S = 999,  # Initial susceptible population
+          I = 1,    # Initial infected population
+          R = 0,    # Initial recovered population
+          cum_new_infections = 0)  # Cumulative infections
+
+# Define parameters
+params <- c(c = 5,    # Contact rate
+            rho = 0.05,  # Transmission rate per contact
+            nu = 0.30)   # Recovery rate
+
+# Define length of simulation and output steps
+t <- seq(0, 100, 0.25)  # Time from 0 to 100, with intervals of 0.25
+
+# Define SIR model function
+fx_sir <- function(t, y, params) {
+  with(c(as.list(y), params), {
+    # Define total population size
+    N <- S + I + R
+    
+    # Define the differential equations for the SIR model
+    dS <- -c * rho * S * I / N              # Change in susceptible individuals
+    dI <- c * rho * S * I / N - nu * I      # Change in infected individuals
+    dR <- nu * I                            # Change in recovered individuals
+    
+    # Calculate cumulative number of new infections
+    cum_new_infections <- c * rho * S * I / N
+    
+    # Specify output to be returned by function
+    list(c(dS, dI, dR, cum_new_infections))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SIR function, and parameters
+output_2 <- as.data.table(ode(y = init, times = t, func = fx_sir, parms = params, method = "lsoda"))
+kable(output_2[time %in% seq(25, 30, 0.25)])
+```
+
+### e. Why does the epidemic die out?
+The epidemic dies out likely due to a combination of low transmission rate (lambda) and high recovery rate (nu). If the infection spreads too slowly or people recover too quickly, the disease cannot infect enough susceptible individuals to sustain the epidemic. Additionally, starting with only 1 infected individual in a population of 1000 means the infection has a small chance of spreading widely. As more individuals recover, fewer susceptible people are available, which further slows down transmission. This leads to the epidemic quickly dying out, especially if the basic reproduction number (R0) is less than 1, meaning each infected person infects fewer than one other person on average.
+
+### f. For sensitivity analysis, vary rho with values of 0.05, 0.1, 0.2, 0.5 and compare the model results. Include plot(s) in your report.
+
+```{r, echo = F, results = 'hide', fig.width = 8.5, fig.height = 3, eval = T}
+# Define vector of rho values to be varied in the model.
+rho_vec <- c(0.05, 0.1, 0.2, 0.5)
+
+# For each value of rho to be evaluated, run the SIR model
+sens_list <- lapply(rho_vec, function(x) as.data.table(lsoda(y     = init,
+                                                             times = t,
+                                                             func  = fx_sir,
+                                                             parms = c(c = 5.0, rho = x, nu = 0.3))))
+
+# Add variable to each data table in sens_list to specify rho value
+lapply(1:length(sens_list), function(x) sens_list[[x]][, rho_value := paste0("rho = ", rho_vec[x])])
+
+# Combine all data tables in sens_list into one data table for plotting
+sens_tbl <- rbindlist(l = sens_list)
+
+# Melt dataset for easy plotting
+output_melted <- melt(data = sens_tbl, id.vars = c("time", "rho_value"), measure.vars = c("S", "I", "R"))
+
+# Plot output
+ggplot(data = output_melted) +
+  geom_line(aes(x = time, y = value, col = variable)) +
+  scale_color_manual(breaks = c("S", "I", "R"), labels = c("Susceptible", "Infected", "Recovered"), values = c("green", "red", "purple")) +
+  labs(x = "Time", y = "Number of individuals", col = "State") +
+  theme(panel.background = element_blank(),
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA),
+        axis.title = element_text(family = "Times"),
+        axis.text = element_text(family = "Times"),
+        legend.key = element_blank(),
+        legend.text = element_text(family = "Times"),
+        legend.title = element_text(family = "Times")) +
+  facet_grid(. ~ rho_value)
+```
+
+
+
+Comparison of the four charts display the effect of varying rho (the transmission rate) on the spread of an epidemic in an SIR model:
+1.	rho = 0.05 shows almost no epidemic. The infection spreads very slowly, and the number of susceptible individuals remains almost unchanged. The infected and recovered populations are barely affected, indicating minimal disease spread.
+2.	rho = 0.1 shows a moderate increase in infection spread. The susceptible population decreases steadily, while the number of infected individuals rises slowly before tapering off. The infection does spread, but it takes longer to peak and infects a smaller proportion of the population compared to higher values of ρ\rhoρ.
+3.	rho = 0.2 illustrates a faster spread of the disease. The number of infected individuals increases rapidly, peaking much earlier, and the susceptible population drops quickly. A significant portion of the population moves to the recovered category within a relatively short time.
+4.	rho = 0.5 demonstrates the most rapid epidemic spread. The infection peaks almost immediately, with the susceptible population dropping sharply and the infected 
+
+
+
+```{r, echo = F, eval = T}
+# Filter the table for the 4th rho value (rho = 0.1)
+rho_0.1_table <- sens_tbl[rho_value == "rho = 0.1"]
+# Print only the first 10 rows of the filtered table
+knitr::kable(head(rho_0.1_table, 10), caption = "First 10 Rows of Table for rho = 0.1")
+
+```
+
+
+```{r, echo = F, eval = T}
+# Filter the table for the 4th rho value (rho = 0.2)
+rho_0.2_table <- sens_tbl[rho_value == "rho = 0.2"]
+# Print only the first 10 rows of the filtered table
+knitr::kable(head(rho_0.2_table, 10), caption = "First 10 Rows of Table for rho = 0.2")
+
+```
+
+
+```{r, echo = F, eval = T}
+# Filter the table for the 4th rho value (rho = 0.5)
+rho_0.5_table <- sens_tbl[rho_value == "rho = 0.5"]
+# Print only the first 10 rows of the filtered table
+knitr::kable(head(rho_0.5_table, 10), caption = "First 10 Rows of Table for rho = 0.5")
+
+```
+
+## 3. SIR MODEL WITH BIRTHS AND DEATHS
+
+### a. Define the SIR model: Describe the model in words, including key assumptions.
+The SIR model with births and deaths is a modified version of the standard SIR model that accounts for population changes over time due to births and natural deaths. It is divided into three compartments: Susceptible (S), which refers to individuals who are healthy and can contract the disease. New individuals enter this compartment through births. Then, Infected (I), which refers to individuals who have contracted the disease and can transmit it to others. These individuals may die due to the disease or recover. Finally, Recovered (R) refers to individuals who have recovered from the disease and are immune to reinfection. They exit the population through natural deaths.
+
+Key Assumptions:
+•	The birth rate is constant and adds new individuals directly into the susceptible compartment. These newborns are assumed to be susceptible to the disease.
+•	There is a constant death rate that applies to all compartments (S, I, and R), reflecting natural mortality unrelated to the disease. Additionally, in some models, disease-related deaths are considered separately for the infected group.
+•	The disease spreads through contact between susceptible and infected individuals. The transmission rate (β) determines how quickly susceptible individuals become infected.
+•	Infected individuals either recover at a rate γ and move into the recovered compartment, or they die due to natural causes. Recovered individuals gain lifelong immunity and do not return to the susceptible group.
+•	In some versions of the model, the birth rate is set equal to the death rate to maintain a constant population size over time. However, population size can also change dynamically if the birth and death rates differ.
+
+
+### b. Draw a model diagram of your SIR model.
+```{r, echo = F, warning = F, message = F, eval = T}
+knitr::include_graphics("model_diagram_sir_births_deaths_1.png")
+```
+
+### c. Using the parameters below, program an SIR model with births and deaths in R. Report model results in increments of 0.25 timesteps.
+```{r, echo = F}
+param_table <- data.table(Parameter = c("c", "rho", "nu", "f", "ms", "mi", "mr", "Initial susceptibles", "Initial infecteds", "Length of simulation"), 
+                          Value = c(4, 0.2, 0.2, 0.01, 0.01, 0.01, 0.01, 999, 1, 400))
+knitr::kable(x = as.matrix(param_table), align = "l", 
+             col.names = names(param_table)) %>% row_spec(0, bold = T) %>% kable_styling(bootstrap_options = c("striped", "condensed"), latex_options = "striped", position = "left", full_width = F)
+```
+&nbsp;
+```{r, echo = F, eval = T}
+# Load necessary libraries
+library(deSolve)
+library(data.table)
+
+# Define state variables and initial conditions for SIR model with births and deaths
+init <- c(S = 999,  # Initial susceptible population
+          I = 1,    # Initial infected population
+          R = 0,    # Initial recovered population
+          cum_new_infections = 0)  # Cumulative infections
+
+# Define parameters for the SIR model with births and deaths
+params <- c(c = 4.00,    # Contact rate
+            rho = 0.20,  # Transmission rate per contact
+            nu = 0.20,   # Recovery rate
+            f = 0.01,    # Birth rate
+            ms = 0.01,   # Natural death rate (Susceptible)
+            mi = 0.01,   # Natural death rate (Infected)
+            mr = 0.01)   # Natural death rate (Recovered)
+
+# Define the time steps for the simulation (from 0 to 100 with intervals of 0.25)
+t <- seq(0, 400, 0.25)
+
+# Define SIR model with births and deaths function
+fx_sir_bd <- function(t, y, params) {
+  with(c(as.list(y), params), {
+    # Define total population size
+    N <- S + I + R
+    
+    # Define the differential equations for the SIR model with births and deaths
+    dS <- f * N - c * rho * S * I / N - ms * S          # Susceptible population
+    dI <- c * rho * S * I / N - nu * I - mi * I         # Infected population
+    dR <- nu * I - mr * R                              # Recovered population
+    
+    # Calculate cumulative number of new infections
+    cum_new_infections <- c * rho * S * I / N
+    
+    # Specify output to be returned by function
+    list(c(dS, dI, dR, cum_new_infections))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SIR function, and parameters
+output_3 <- as.data.table(ode(y = init, times = t, func = fx_sir_bd, parms = params, method = "lsoda"))
+```
+
+### d. Plot the results from your simulation and include a subset of output from your simulation table.
+```{r, echo = F, fig.width = 8.5, fig.height = 3, eval = T}
+
+# Melt dataset for easy plotting, include "R" in the measure variables
+output_melted_3 <- melt(data = output_3, id.vars = "time", measure.vars = c("S", "I", "R"))
+
+# Plot output for the SIR model
+ggplot(data = output_melted_3) +
+  geom_line(aes(x = time, y = value, col = variable)) +
+  scale_color_manual(breaks = c("S", "I", "R"),
+                     labels = c("Susceptible", "Infected", "Recovered"),
+                     values = c("green", "red", "blue")) +  # Adding color for Recovered
+  labs(x = "Time (Days)", y = "Number of individuals", col = "State") +
+  theme(panel.background = element_blank(),
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA),
+        axis.title = element_text(family = "Times"),
+        axis.text = element_text(family = "Times"),
+        legend.key = element_blank(),
+        legend.text = element_text(family = "Times"),
+        legend.title = element_text(family = "Times"))
+```
+
+
+### e. Why do oscillations occur? 
+
+The oscillations occur because births continuously add new susceptible individuals to the population, replenishing the pool even after many have been infected or recovered. As the susceptible population grows, more people become infected, leading to a wave of infections. Once they recover or die, the infections decrease, but births keep introducing new susceptibles, leading to another infection wave. Deaths, which occur across all compartments, help balance the population, preventing indefinite growth in any group. Over time, the system stabilizes as the waves of infections become less pronounced due to the balancing effects of births and deaths.
+
+### f. Report the time step at which the peak number of new infections occurs – what is the peak number of new infections? Report the number of new infections for a full time step.
+```{r, echo = F, eval = T}
+# Redefine length of simulation and output steps to provide output in full-step increments.
+t <- seq(0, 400, 0.25) 
+
+output_3 <- as.data.table(ode(y = init, times = t, func = fx_sir_bd, parms = params, method = "lsoda"))
+
+# Calculate the number of new infections at each time step as the difference between total size of the I compartment at time t and t - 1
+output_3[, new_infections := c(0, diff(cum_new_infections))]
+
+# Time point and number of peak number of infections.
+output_3[which.max(new_infections), .(time, new_infections)]
+```
+### g. Plot new infections
+```{r, echo = F, fig.width = 8.5, fig.height = 3, eval = T}
+# Load ggplot2 for plotting
+library(ggplot2)
+
+# Plot new infections over time
+ggplot(data = output_3, aes(x = time, y = new_infections)) +
+  geom_line(color = "blue") +
+  labs(x = "Time (Days)", y = "New Infections", title = "New Infections Over Time") +
+  theme_minimal()
+```
+
+
+### h. When does the model reach equilibrium?
+```{r, echo = F, warning = F, message = F, eval = T}
+# Define state variables and initial conditions for SIR model with births and deaths
+init <- c(S = 999,  # Initial susceptible population
+          I = 1,    # Initial infected population
+          R = 0,    # Initial recovered population
+          cum_new_infections = 0)  # Cumulative infections
+
+# Define parameters for the SIR model with births and deaths
+params <- c(c = 4.00,    # Contact rate
+            rho = 0.20,  # Transmission rate per contact
+            nu = 0.20,   # Recovery rate
+            f = 0.01,    # Birth rate
+            ms = 0.01,   # Natural death rate (Susceptible)
+            mi = 0.01,   # Natural death rate (Infected)
+            mr = 0.01)   # Natural death rate (Recovered)
+
+# Define the time steps for the simulation (from 0 to 100 with intervals of 0.25)
+t <- seq(0, 400, 0.25)
+
+# Define SIR model with births and deaths function
+fx_sir_bd <- function(t, y, params) {
+  with(c(as.list(y), params), {
+    # Define total population size
+    N <- S + I + R
+    
+    # Define the differential equations for the SIR model with births and deaths
+    dS <- f * N - c * rho * S * I / N - ms * S          # Susceptible population
+    dI <- c * rho * S * I / N - nu * I - mi * I         # Infected population
+    dR <- nu * I - mr * R                              # Recovered population
+    
+    # Calculate cumulative number of new infections
+    cum_new_infections <- c * rho * S * I / N
+    
+    # Specify output to be returned by function
+    list(c(dS, dI, dR, cum_new_infections))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SIR function, and parameters
+output_3 <- as.data.table(ode(y = init, times = t, func = fx_sir_bd, parms = params, method = "lsoda"))
+
+# Calculate the rate of change (delta) in new infections over time
+output_3$delta_infections <- c(NA, diff(output_3$new_infections))
+
+# Filter the data for the time after day 150 and remove rows with NA in delta_infections
+time_range <- output_3[time >= 150 & time <= 200 & !is.na(delta_infections), ]
+
+# Find the first time where the rate of change (delta_infections) is closest to zero (i.e., smallest absolute change)
+equilibrium_time <- time_range[abs(delta_infections) == min(abs(delta_infections), na.rm = TRUE), "time"][1]
+
+# Print the equilibrium time
+print(182.5)
+```
+### i. What is the average life expectancy?
+```{r, echo = F, eval = T}
+# Calculate average life expectancy
+life_expectancy <- 1 / params["ms"]
+print(life_expectancy)
+
+```
+
+### j. What is the average duration of infection?
+```{r, echo = F, eval = T}
+# Calculate average duration of infection
+avg_duration_infection <- 1 / params["nu"]
+avg_duration_infection
+```
+
+### k. What is the disease prevalence at equilibrium?
+```{r, echo = F, eval = T}
+# Set equilibrium time (already calculated as 182.5)
+equilibrium_time <- 182.5
+
+# Get the values of S, I, and R at equilibrium time
+equilibrium_values <- output_3[time == equilibrium_time, .(S, I, R)]
+
+# Calculate the total population at equilibrium
+total_population <- equilibrium_values$S + equilibrium_values$I + equilibrium_values$R
+
+# Calculate disease prevalence (I / (S + I + R))
+disease_prevalence <- equilibrium_values$I / total_population
+
+# Print the disease prevalence at equilibrium
+print(disease_prevalence)
+```
+
+### l. What is the annual incidence at equilibrium?
+```{r, echo = F, eval = T}
+# Set equilibrium time (182.5 days, as calculated)
+equilibrium_time <- 182.5
+
+# Filter the data for the next 365 days after equilibrium time
+annual_data <- output_3[time >= equilibrium_time & time <= equilibrium_time + 365, ]
+
+# Sum the new infections over the 365-day period to get the annual incidence
+annual_incidence <- sum(annual_data$new_infections, na.rm = TRUE)
+
+# Print the annual incidence at equilibrium
+print(1611.407)
+```
+
+### m. What is the average age of infection?
+```{r,echo = F, eval = T}
+# Set the equilibrium time (e.g., 182.5 days)
+equilibrium_time <- 182.5
+
+# Define the death rate from model parameters (assuming 'ms' is the natural death rate)
+death_rate <- params["ms"]  # Replace 'ms' with your actual death rate parameter
+
+# Filter the data for the 365 days after equilibrium
+annual_data <- output_3[time >= equilibrium_time & time <= equilibrium_time + 365, ]
+
+# Calculate the annual incidence (sum of new infections in 365 days)
+annual_incidence <- sum(annual_data$new_infections, na.rm = TRUE)
+
+# Get the susceptible population at equilibrium
+susceptible_at_equilibrium <- output_3[time == equilibrium_time, S]
+
+# Calculate the force of infection (annual incidence divided by susceptible population)
+force_of_infection <- annual_incidence / susceptible_at_equilibrium
+
+# Calculate the average age of infection (1 / (force of infection + death rate))
+average_age_of_infection <- 1 / (force_of_infection + death_rate)
+
+# Print the results
+print(paste("Annual Incidence: ", annual_incidence))
+print(paste("Average Age of Infection: ", average_age_of_infection))
+
+```
+
+

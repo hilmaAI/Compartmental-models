@@ -1,0 +1,658 @@
+---
+title: 'Lab 2: More model building in R _Hilma Nakambale'
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include = FALSE, echo = T}
+knitr::opts_chunk$set(echo = T, tidy = FALSE, tidy.opts = list(width.cutoff = 60))
+```
+
+```{r, echo = T}
+# Attach packages
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(deSolve))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(rmarkdown))
+suppressPackageStartupMessages(library(tinytex))
+suppressPackageStartupMessages(library(pdftools))
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(reshape2))
+suppressPackageStartupMessages(library(formatR))
+#suppressPackageStartupMessages(library(facetscales))
+```
+
+## 1. EPIDEMIC CYCLES IN AN SIR MODEL
+
+### a. Define epidemic cycles in a SIR model with births and deaths: describe the model in words, including key assumptions.
+
+The SIR model with births and deaths is a modified version of the standard SIR model that accounts for population changes over time due to births and natural deaths. It is divided into three compartments: Susceptible (S), which refers to individuals who are healthy and can contract the disease. New individuals enter this compartment through births. Then, Infected (I), which refers to individuals who have contracted the disease and can transmit it to others. These individuals may die due to the disease or recover. Finally, Recovered (R) refers to individuals who have recovered from the disease and are immune to reinfection. They exit the population through natural deaths.
+
+In this model, epidemic cycles can emerge because of the interplay between the replenishment of susceptibles through births and the depletion of susceptibles through infection. When the number of susceptible individuals is high, the disease spreads rapidly, increasing the number of infected individuals. As more people become infected and subsequently recover, the number of susceptible individuals decreases, causing the infection to slow down and eventually recede. However, with births continuously adding new susceptibles to the population, the susceptible pool eventually becomes large enough for another epidemic outbreak to occur.
+
+Assupmptions:
+
+•	Each individual has an equal chance of contacting any other individual.
+•	New individuals are born into the susceptible class at a constant rate (μ).
+•	Individuals in all compartments (S, I, R) die at the same constant rate (μ).
+•	Susceptibles become infected at a rate proportional to the number of infected individuals (β).
+•	Infected individuals recover and gain immunity at a constant rate.
+•	Death is only due to natural causes, not the disease itself.
+•	Population changes occur only due to births and natural deaths; no migration occurs.
+
+### b. Draw a model diagram of your SIR model with births and deaths.
+```{r, echo = F, eval = T}
+# Convert the PDF to PNG first
+# pdf_convert("model_diagram_sir_births_deaths_epidemic_cycles.pdf", format = "png", dpi = 300)
+
+# Include the PNG image in the R Markdown document
+knitr::include_graphics("model_diagram_sir_births_deaths_epidemic_cycles_1.png")
+```
+
+### c. Using the parameters below, program an (epidemic cycle) SIR model with births and deaths in R. Report model results in increments of 1 timestep.
+```{r, echo = F, eval= F}
+param_table <- data.table(Parameter = c("c", "rho", "nu", "Birth and death rate", "Initial susceptibles", "Initial infecteds", "Initial recovereds", "Length of simulation (days)"), Value = c("4", "0.4", "1/14", "1/(50*365)", "999", "1", "0", "10,000"))
+knitr::kable(x = as.matrix(param_table), align = "l", col.names = names(param_table)) %>% row_spec(0, bold = T) %>% kable_styling(bootstrap_options = c("striped", "condensed"), latex_options = "striped", position = "left", full_width = F)
+```
+&nbsp;
+```{r, echo = F, eval = T}
+# Define state variables and initial conditions for SIR model with births and deaths
+init <- c(S = 999,  # Initial susceptible population
+          I = 1,    # Initial infected population
+          R = 0,    # Initial recovered population
+          cum_new_infections = 0)  # Cumulative infections
+
+# Define parameters
+params <- c(c = 4,                      # Contact rate
+            rho = 0.4,                  # Transmission rate per contact
+            nu = 1/14,                  # Recovery rate
+            birth_death_rate = 1/(50*365))  # Birth and death rate (1 / average lifespan)
+
+# Define length of simulation and output steps (10,000 days in increments of 1 day)
+t <- seq(0, 10000, 1)
+
+# Define SIR model function with births and deaths
+fx_sir_bd <- function(t, y, params) {
+  with(as.list(c(y, params)), {
+    # Define total population size
+    N <- S + I + R
+    
+    # Define the differential equations for the SIR model with births and deaths
+    dS <- birth_death_rate * N - c * rho * S * I / N - birth_death_rate * S  # Susceptibles change
+    dI <- c * rho * S * I / N - nu * I - birth_death_rate * I               # Infected change
+    dR <- nu * I - birth_death_rate * R                                     # Recovered change
+    
+    # Calculate cumulative number of new infections
+    cum_new_infections <- c * rho * S * I / N
+    
+    # Specify output to be returned by function
+    list(c(dS, dI, dR, cum_new_infections))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SIR function, and parameters
+output_1 <- as.data.table(ode(y = init, times = t, func = fx_sir_bd, parms = params, method = "lsoda"))
+
+# Print first few rows of output
+head(output_1)
+
+```
+
+
+### d. Plot the results from your simulation and include a subset of output from your simulation table. Include plots of the size of (1) the state compartments over all time steps and (2) R~n~, the proportion susceptible, number of new births, and new infections over time steps 4,000-6,000.
+
+```{r, echo = F, fig.width = 8.5, fig.height = 3, eval = T}
+
+# Define state variables and initial conditions for SIR model with births and deaths
+init <- c(S = 999,  # Initial susceptible population
+          I = 1,    # Initial infected population
+          R = 0,    # Initial recovered population
+          cum_new_infections = 0)  # Cumulative infections
+
+# Define parameters
+params <- c(c = 4,                      # Contact rate
+            rho = 0.4,                  # Transmission rate per contact
+            nu = 1/14,                  # Recovery rate
+            birth_death_rate = 1/(50*365))  # Birth and death rate (1 / average lifespan)
+
+# Define length of simulation and output steps (10,000 days in increments of 1 day)
+t <- seq(0, 10000, 1)
+
+# Define SIR model function with births and deaths
+fx_sir_bd <- function(t, y, params) {
+  with(as.list(c(y, params)), {
+    # Define total population size
+    N <- S + I + R
+    
+    # Define the differential equations for the SIR model with births and deaths
+    dS <- birth_death_rate * N - c * rho * S * I / N - birth_death_rate * S  # Susceptibles change
+    dI <- c * rho * S * I / N - nu * I - birth_death_rate * I               # Infected change
+    dR <- nu * I - birth_death_rate * R                                     # Recovered change
+    
+    # Calculate cumulative number of new infections
+    cum_new_infections <- c * rho * S * I / N
+    
+    # Specify output to be returned by function
+    list(c(dS, dI, dR, cum_new_infections))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SIR function, and parameters
+output_2 <- as.data.table(ode(y = init, times = t, func = fx_sir_bd, parms = params, method = "lsoda"))
+
+# Melt dataset for easy plotting, include "R" in the measure variables
+output_melted_2 <- melt(data = output_2, id.vars = "time", measure.vars = c("S", "I", "R"))
+
+# Plot 1: State compartments over all time steps
+ggplot(data = output_melted_2) +
+  geom_line(aes(x = time, y = value, col = variable)) +
+  scale_color_manual(breaks = c("S", "I", "R"),
+                     labels = c("Susceptible", "Infected", "Recovered"),
+                     values = c("green", "red", "blue")) +  # Adding color for Recovered
+  labs(x = "Time (Days)", y = "Number of individuals", col = "State") +
+  theme(panel.background = element_blank(),
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA),
+        axis.title = element_text(family = "Times"),
+        axis.text = element_text(family = "Times"),
+        legend.key = element_blank(),
+        legend.text = element_text(family = "Times"),
+        legend.title = element_text(family = "Times")) +
+  ggtitle("State Compartments Over All Time Steps")
+
+# Plot 2: Proportion susceptible, new births, and new infections between time steps 4,000 and 6,000
+
+# Subset the data between time steps 4000 and 6000
+output_subset <- output_2[time >= 4000 & time <= 6000]
+
+# Extract the parameters from the params vector
+birth_death_rate <- params['birth_death_rate']
+c <- params['c']
+rho <- params['rho']
+
+# Calculate additional quantities: proportion susceptible (S/N), new births, and new infections
+output_subset[, N := S + I + R]  # Total population size
+output_subset[, proportion_susceptible := S / N]
+output_subset[, new_births := birth_death_rate * N]  # New births
+output_subset[, new_infections := c * rho * S * I / N]  # New infections
+
+# Melt the subsetted data for easy plotting
+output_subset_melted <- melt(output_subset, id.vars = "time", measure.vars = c("proportion_susceptible", "new_births", "new_infections"))
+
+# Plot the second graph
+ggplot(data = output_subset_melted) +
+  geom_line(aes(x = time, y = value, col = variable)) +
+  scale_color_manual(breaks = c("proportion_susceptible", "new_births", "new_infections"),
+                     labels = c("Proportion Susceptible", "New Births", "New Infections"),
+                     values = c("green", "blue", "red")) +
+  labs(x = "Time (Days)", y = "Value", col = "Variable") +
+  theme(panel.background = element_blank(),
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA),
+        axis.title = element_text(family = "Times"),
+        axis.text = element_text(family = "Times"),
+        legend.key = element_blank(),
+        legend.text = element_text(family = "Times"),
+        legend.title = element_text(family = "Times")) +
+  ggtitle("Proportion Susceptible, New Births, and New Infections (Time Steps 4000-6000)")
+
+# Show a subset of the output table from the simulation (time steps 4000-6000)
+head(output_subset)
+
+
+```
+
+
+### e. Describe what is happening to the number of new infections for each of these cases:
+
+* R~n~ > 1: The number of new infections is increasing, indicating the disease is spreading rapidly.
+* R~n~ < 1: The number of new infections is decreasing, meaning the epidemic is subsiding as fewer people are being infected.
+* R~n~ at peak: The number of new infections is at its maximum, and the epidemic is transitioning from growth to decline, with each infected person infecting exactly one other person on average.
+
+### f. When the number of new infections is less than the number of births, the proportion susceptibles is ____________. When the number of new infections is more than the number of births, the proportion of susceptibles is ________________.
+
+When the number of new infections is less than the number of births, the proportion of susceptibles is increasing. When the number of new infections is more than the number of births, the proportion of susceptibles is decreasing.
+
+## 2. SEIR MODEL
+
+### a. Define the SEIR model (no births or deaths): describe the model in words, including key assumptions.
+
+The SEIR model is a modified version of the SIR model that includes an additional compartment to account for the latent period of a disease. It is divided into four compartments: Susceptible (S) refers to individuals who are healthy and can contract the disease. These individuals move to the exposed compartment when they come into contact with an infected individual. Exposed (E) refers to individuals who have been infected but are not yet infectious. This compartment represents the latent period, where individuals have the disease but cannot yet transmit it to others. After the latent period, they move to the infected compartment. Infected (I) refers to individuals who have contracted the disease and can transmit it to others. After a period of being infectious, individuals recover and move to the recovered compartment. Recovered (R) refers to individuals who have recovered from the disease and gained immunity, meaning they are no longer susceptible to reinfection. In this model, the introduction of the exposed (E) compartment accounts for the incubation period, during which individuals are infected but not yet infectious. This latency causes a delay between the initial exposure of susceptible individuals to the disease and their ability to spread it to others. As susceptible individuals become exposed and then infected, the number of susceptible individuals decreases. Eventually, the number of infected individuals falls as more people recover and gain immunity. Since this model excludes births and deaths, the total population remains constant, and the epidemic eventually slows down and recedes as the susceptible population decreases.
+
+Assumptions:
+•	Each individual has an equal chance of contacting any other individual.
+•	There are no births or deaths, so the population size remains constant.
+•	After exposure, individuals spend a latent period in the exposed compartment before becoming infectious, moving from E to I at a constant rate (σ).
+•	Susceptible individuals become exposed at a rate proportional to the number of infected individuals (β).
+•	Infected individuals recover and gain immunity at a constant rate (γ).
+•	Recovered individuals are immune and cannot be reinfected.
+
+### b. Draw a model diagram of your SEIR model (without births and deaths).
+```{r, echo = F, eval = T}
+# Convert the PDF to PNG first
+#pdf_convert("model_diagram_seir_no_births_deaths.pdf", format = "png", dpi = 300)
+
+# Include the PNG image in the R Markdown document
+knitr::include_graphics("model_diagram_seir_no_births_deaths_1.png")
+```
+
+### c. Using the parameters below, program an SEIR model in R (no births or deaths). Report model results in increments of 1 timestep.
+```{r, echo = F, eval = F}
+param_table <- data.table(Parameter = c("R0", "Preinfectious period", "Duration of infection", "Initial susceptibles", "Initial exposed", "Initial infecteds", "Initial recovereds", "Length of simulation (days)"), Value = c("1.8", "8 days", "7 days", "999", "0", "1", "0", "300"))
+knitr::kable(x = as.matrix(param_table), align = "l", col.names = names(param_table)) %>% row_spec(0, bold = T) %>% kable_styling(bootstrap_options = c("striped", "condensed"), latex_options = "striped", position = "left", full_width = F)
+```
+&nbsp;
+
+```{r, echo = F, fig.width = 8.5, fig.height = 3, eval = T}
+
+# Define state variables and initial conditions for SEIR model (without births and deaths)
+init <- c(S = 999,  # Initial susceptible population
+          E = 0,    # Initial exposed population
+          I = 1,    # Initial infected population
+          R = 0)    # Initial recovered population
+
+# Define parameters
+params <- c(R0 = 1.8,              # Basic reproduction number
+            sigma = 1/8,           # Transition rate from Exposed to Infected (1/latent period)
+            gamma = 1/7)           # Recovery rate (1/duration of infection)
+
+# Calculate beta from R0
+beta <- params["R0"] * params["gamma"]
+
+# Define length of simulation and output steps
+t <- seq(0, 300, 1)  # Simulate for 300 days with time steps of 1 day
+
+# Define SEIR model function
+fx_seir <- function(t, y, params) {
+  with(as.list(c(y, params)), {
+    # Total population size
+    N <- S + E + I + R
+    
+    # Differential equations for the SEIR model
+    dS <- -beta * S * I / N                    # Susceptible change
+    dE <- beta * S * I / N - sigma * E         # Exposed change
+    dI <- sigma * E - gamma * I                # Infected change
+    dR <- gamma * I                            # Recovered change
+    
+    # Return the rate of change
+    list(c(dS, dE, dI, dR))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SEIR function, and parameters
+output_seir <- as.data.table(ode(y = init, times = t, func = fx_seir, parms = params, method = "lsoda"))
+
+# Print first few rows of output
+head(output_seir)
+
+# Optional: plot the results (e.g., using ggplot2)
+
+```
+
+### d. Plot the results from your simulation and include a subset of output from your simulation table.
+
+```{r, echo = F, fig.width = 8.5, fig.height = 3, eval = T}
+
+# Define state variables and initial conditions for SEIR model (without births and deaths)
+init <- c(S = 999,  # Initial susceptible population
+          E = 0,    # Initial exposed population
+          I = 1,    # Initial infected population
+          R = 0)    # Initial recovered population
+
+# Define parameters
+params <- c(R0 = 1.8,              # Basic reproduction number
+            sigma = 1/8,           # Transition rate from Exposed to Infected (1/latent period)
+            gamma = 1/7)           # Recovery rate (1/duration of infection)
+
+# Calculate beta from R0
+beta <- params["R0"] * params["gamma"]
+
+# Define length of simulation and output steps
+t <- seq(0, 300, 1)  # Simulate for 300 days with time steps of 1 day
+
+# Define SEIR model function
+fx_seir <- function(t, y, params) {
+  with(as.list(c(y, params)), {
+    # Total population size
+    N <- S + E + I + R
+    
+    # Differential equations for the SEIR model
+    dS <- -beta * S * I / N                    # Susceptible change
+    dE <- beta * S * I / N - sigma * E         # Exposed change
+    dI <- sigma * E - gamma * I                # Infected change
+    dR <- gamma * I                            # Recovered change
+    
+    # Return the rate of change
+    list(c(dS, dE, dI, dR))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SEIR function, and parameters
+output_seir <- as.data.table(ode(y = init, times = t, func = fx_seir, parms = params, method = "lsoda"))
+
+# Melt the dataset for easy plotting, including all compartments (S, E, I, R)
+output_melted <- melt(data = output_seir, id.vars = "time", measure.vars = c("S", "E", "I", "R"))
+
+# Plot the SEIR model results over time
+ggplot(data = output_melted) +
+  geom_line(aes(x = time, y = value, color = variable)) +
+  labs(x = "Time (Days)", y = "Population Size", color = "Compartment") +
+  theme_minimal() +
+  scale_color_manual(values = c("blue", "orange", "red", "green")) +
+  ggtitle("SEIR Model Simulation Over Time") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Extract a subset of the output table (e.g., first 10 rows of the simulation results)
+output_subset <- output_seir[1:10, ]
+print(output_subset)
+
+```
+
+### e. What is the rate of becoming infectious (from pre-infectious)?
+
+From the parameters provided:
+
+Pre-infectious period = 8 days
+
+1/Pre-infectious period = 1/8 = 0.125 per day
+
+
+### f. What is the recovery rate?
+
+Duration of infection = 7 days
+
+1/Duration of infection = 1/7 ~ 0.143 per day
+
+### g. How would you calculate lambda?
+
+In SEIR models, 𝜆represents the force of infection, which is the rate at which susceptible individuals become exposed to the disease. It depends on the transmission rate β and the number of infected individuals.
+
+λ = β⋅ I/N
+
+β is the transmission rate (which can be calculated from R0 as β = R0⋅γ,
+I is the number of infectious individuals at a given time,
+N is the total population size (S + E + I + R)
+
+### h. Why would you include births and deaths in this model?
+
+Including births and deaths in the SEIR model would make the model more realistic for long-term simulations of an infectious disease in a population. In real populations, individuals are continuously being born and dying, which affects the number of susceptibles (through births) and the overall population size (through natural deaths). Births add new susceptibles to the population, which can trigger new cycles of infection in endemic diseases. Deaths (whether from natural causes or disease-induced) affect the number of individuals in each compartment and thus impact the spread and control of the disease.
+
+### i. Under what conditions (i.e., what combinations of contact rate, rho, and duration of disease) would R~0~ < 1?
+
+The basic reproduction number 𝑅0 is the average number of secondary infections caused by one infected individual in a fully susceptible population. 
+
+R0 = β.1/γ
+
+β = contact rate x ρ(transmission rate per contact),
+γ is the recovery rate (the inverse of the duration of infection).
+
+For R0 < 1, the following condition must hold:β⋅1/γ <1
+
+This implies that the transmission rate β must be sufficiently low compared to the recovery rate γ. In terms of contact rate,ρ, and duration of disease, R0 < 1 occurs when:
+
+The contact rate is low (fewer interactions between individuals),
+
+The transmission probability per contact (ρ) is low (lower chance of infection upon contact),
+
+The duration of infection is short (individuals recover quickly, reducing the window for transmission).
+
+
+Mathematically, this can be achieved by having either a low contact rate, a low transmission probability, or a short duration of infection, such that the product 𝛽= contact rate ×𝜌is smaller than the recovery rate γ.
+
+## 3. SIRS MODEL (WANING IMMUNITY)
+
+### a. Draw a model diagram of the SIRS model (without births and deaths).
+```{r, echo = F, eval = T}
+# Convert the PDF to PNG first
+#pdf_convert("model_diagram_sirs_no_births_deaths.pdf", format = "png", dpi = 300)
+
+# Include the PNG image in the R Markdown document
+knitr::include_graphics("model_diagram_sirs_no_births_deaths_1.png")
+```
+
+### b. Using the parameters below, program an SIRS model in R (no births or deaths). Report model results in increments of 1 timestep.
+```{r, echo = F, eval = F}
+param_table <- data.table(Parameter = c("c", "rho", "nu", "Duration of immunity", "Rate of waning immunity (omega)", "Initial susceptibles", "Initial infecteds", "Initial recovereds", "Length of simulation (days)"), Value = c("4", "0.4", "1/14", "365 days", "1/365", "999", "1", "0", "300"))
+knitr::kable(x = as.matrix(param_table), align = "l", col.names = names(param_table)) %>% row_spec(0, bold = T) %>% kable_styling(bootstrap_options = c("striped", "condensed"), latex_options = "striped", position = "left", full_width = F)
+```
+
+
+```{r, echo = F, fig.width = 8.5, fig.height = 3, eval = T}
+
+# Define state variables and initial conditions for SIRS model (without births and deaths)
+init <- c(S = 999,  # Initial susceptible population
+          I = 1,    # Initial infected population
+          R = 0)    # Initial recovered population
+
+# Define parameters for the SIRS model
+params <- c(c = 4,               # Contact rate
+            rho = 0.4,           # Transmission rate per contact
+            nu = 1/14,           # Recovery rate (1/duration of infection)
+            omega = 1/365)       # Rate of waning immunity (1/duration of immunity)
+
+# Calculate beta from contact rate and transmission rate per contact
+beta <- params["c"] * params["rho"]
+
+# Define length of simulation and output steps
+t <- seq(0, 300, 1)  # Simulate for 300 days with time steps of 1 day
+
+# Define SIRS model function
+fx_sirs <- function(t, y, params) {
+  with(as.list(c(y, params)), {
+    # Total population size
+    N <- S + I + R
+    
+    # Differential equations for the SIRS model
+    dS <- omega * R - beta * S * I / N      # Susceptible change
+    dI <- beta * S * I / N - nu * I         # Infected change
+    dR <- nu * I - omega * R                # Recovered change
+    
+    # Return the rate of change
+    list(c(dS, dI, dR))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SIRS function, and parameters
+output_sirs <- as.data.table(ode(y = init, times = t, func = fx_sirs, parms = params, method = "lsoda"))
+
+# Print first few rows of output
+print(head(output_sirs))
+
+# Plot the results
+output_melted <- melt(data = output_sirs, id.vars = "time", measure.vars = c("S", "I", "R"))
+
+ggplot(data = output_melted) +
+  geom_line(aes(x = time, y = value, color = variable)) +
+  labs(x = "Time (Days)", y = "Population Size", color = "Compartment") +
+  theme_minimal() +
+  scale_color_manual(values = c("blue", "red", "green")) +
+  ggtitle("SIRS Model Simulation Over Time") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Extract a subset of the output table (e.g., first 10 rows of the simulation results)
+output_subset <- output_sirs[1:10, ]
+print(output_subset)
+
+```
+
+&nbsp;
+
+### c. Plot the number of susceptible, infected, and recovered individuals over time.
+```{r, echo = F, fig.width = 8.5, fig.height = 3, eval = T}
+
+# Define state variables and initial conditions for SIRS model (without births and deaths)
+init <- c(S = 999,  # Initial susceptible population
+          I = 1,    # Initial infected population
+          R = 0)    # Initial recovered population
+
+# Define parameters for the SIRS model
+params <- c(c = 4,               # Contact rate
+            rho = 0.4,           # Transmission rate per contact
+            nu = 1/14,           # Recovery rate (1/duration of infection)
+            omega = 1/365)       # Rate of waning immunity (1/duration of immunity)
+
+# Calculate beta from contact rate and transmission rate per contact
+beta <- params["c"] * params["rho"]
+
+# Define length of simulation and output steps
+t <- seq(0, 300, 1)  # Simulate for 300 days with time steps of 1 day
+
+# Define SIRS model function
+fx_sirs <- function(t, y, params) {
+  with(as.list(c(y, params)), {
+    # Total population size
+    N <- S + I + R
+    
+    # Differential equations for the SIRS model
+    dS <- omega * R - beta * S * I / N      # Susceptible change
+    dI <- beta * S * I / N - nu * I         # Infected change
+    dR <- nu * I - omega * R                # Recovered change
+    
+    # Return the rate of change
+    list(c(dS, dI, dR))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SIRS function, and parameters
+output_sirs <- as.data.table(ode(y = init, times = t, func = fx_sirs, parms = params, method = "lsoda"))
+
+# Print first few rows of output
+print(head(output_sirs))
+
+# Melt the dataset for easy plotting, including S, I, R compartments
+output_melted <- melt(data = output_sirs, id.vars = "time", measure.vars = c("S", "I", "R"))
+
+# Plot the SIRS model results over time
+ggplot(data = output_melted) +
+  geom_line(aes(x = time, y = value, color = variable)) +
+  labs(x = "Time (Days)", y = "Population Size", color = "Compartment") +
+  theme_minimal() +
+  scale_color_manual(values = c("blue", "red", "green")) +
+  ggtitle("SIRS Model Simulation Over Time") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Extract a subset of the output table (e.g., first 10 rows of the simulation results)
+output_subset <- output_sirs[1:10, ]
+print(output_subset)
+
+```
+
+
+### d. Plot the number of incident infections over time.
+
+```{r,echo = F, warning = F, eval = T}
+# Calculate the number of new infections at each time step as the difference between total size of the I compartment at time t and t - 1
+# Define state variables and initial conditions for SIRS model (without births and deaths)
+init <- c(S = 999,  # Initial susceptible population
+          I = 1,    # Initial infected population
+          R = 0)    # Initial recovered population
+
+# Define parameters for the SIRS model
+params <- c(c = 4,               # Contact rate
+            rho = 0.4,           # Transmission rate per contact
+            nu = 1/14,           # Recovery rate (1/duration of infection)
+            omega = 1/365)       # Rate of waning immunity (1/duration of immunity)
+
+# Calculate beta from contact rate and transmission rate per contact
+beta <- params["c"] * params["rho"]
+
+# Define length of simulation and output steps
+t <- seq(0, 300, 1)  # Simulate for 300 days with time steps of 1 day
+
+# Define SIRS model function with incident infections
+fx_sirs <- function(t, y, params) {
+  with(as.list(c(y, params)), {
+    # Total population size
+    N <- S + I + R
+    
+    # Differential equations for the SIRS model
+    dS <- omega * R - beta * S * I / N      # Susceptible change
+    dI <- beta * S * I / N - nu * I         # Infected change
+    dR <- nu * I - omega * R                # Recovered change
+    
+    # Incident infections (new infections per time step)
+    incidence <- beta * S * I / N
+    
+    # Return the rate of change and the incidence
+    list(c(dS, dI, dR), incidence = incidence)
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SIRS function, and parameters
+output_sirs <- as.data.table(ode(y = init, times = t, func = fx_sirs, parms = params, method = "lsoda"))
+
+# Rename columns (since `ode` will append additional columns for the incidence)
+colnames(output_sirs) <- c("time", "S", "I", "R", "incident_infections")
+
+# Plot the incident infections over time
+ggplot(data = output_sirs, aes(x = time, y = incident_infections)) +
+  geom_line(color = "red", size = 1) +
+  labs(x = "Time (Days)", y = "Incident Infections", title = "Incident Infections Over Time") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Print first few rows of the output to inspect incident infections
+print(head(output_sirs))
+
+```
+```{r, echo = F, eval = T}
+
+# Define state variables and initial conditions for SIRS model (without births and deaths)
+init <- c(S = 999,  # Initial susceptible population
+          I = 1,    # Initial infected population
+          R = 0)    # Initial recovered population
+
+# Define parameters for the SIRS model
+params <- c(c = 4,               # Contact rate
+            rho = 0.4,           # Transmission rate per contact
+            nu = 1/14,           # Recovery rate (1/duration of infection)
+            omega = 1/365)       # Rate of waning immunity (1/duration of immunity)
+
+# Calculate beta from contact rate and transmission rate per contact
+beta <- params["c"] * params["rho"]
+
+# Define length of simulation and output steps
+t <- seq(0, 300, 1)  # Simulate for 300 days with time steps of 1 day
+
+# Define SIRS model function
+fx_sirs <- function(t, y, params) {
+  with(as.list(c(y, params)), {
+    # Total population size
+    N <- S + I + R
+    
+    # Differential equations for the SIRS model
+    dS <- omega * R - beta * S * I / N      # Susceptible change
+    dI <- beta * S * I / N - nu * I         # Infected change
+    dR <- nu * I - omega * R                # Recovered change
+    
+    # Return the rate of change
+    list(c(dS, dI, dR))
+  })
+}
+
+# Call the lsoda function with initial conditions, time steps, SIRS function, and parameters
+output_sirs <- as.data.table(ode(y = init, times = t, func = fx_sirs, parms = params, method = "lsoda"))
+
+# Calculate the number of new infections at each time step
+# New infections are the increase in the infected population from time t-1 to time t
+output_sirs[, new_infections := c(0, diff(I))]  # 'diff()' calculates I(t) - I(t-1)
+
+# Print the first few rows to inspect the new infections column
+print(output_sirs[, .(time, I, new_infections)])
+
+```
+
+
+
+
+
+
+
+
+
+
